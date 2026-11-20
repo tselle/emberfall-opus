@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Emberfall: The Emberwild Saga — a party-based fantasy RPG that runs in the browser.">
+  <title>Emberfall: The Emberwild Saga</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body data-screen="title">
+  <div id="app">
+    <header id="topbar">
+      <span class="brand">Emberfall</span>
+      <span id="hud" class="hidden"></span>
+    </header>
+
+    <section id="screen-title" class="screen"></section>
+
+    <section id="screen-create" class="screen hidden"></section>
+
+    <section id="screen-combat" class="screen hidden">
+      <div id="combatmain">
+        <div id="isowrap"><canvas id="iso" aria-label="Battle field"></canvas></div>
+        <div id="cbpanel">
+          <div id="cbstatus"></div>
+          <div id="cbactions" role="toolbar" aria-label="Combat actions"></div>
+          <div id="cblog" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-overland" class="screen hidden">
+      <div id="wildmain">
+        <div id="wildwrap"><canvas id="wild" aria-label="Map of the wilds"></canvas></div>
+        <div id="wildside">
+          <div id="wildloc" aria-live="polite"></div>
+          <div id="wildbar" role="toolbar" aria-label="Travel"></div>
+          <p class="hint">Walk onto a site to visit it. Walk into the town gate or onto Thornwick (T) to return to town.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen hidden">
+      <div id="main">
+        <div id="viewcol">
+          <div id="viewwrap">
+            <canvas id="view" aria-label="First-person view"></canvas>
+          </div>
+          <div id="minirow">
+            <canvas id="mini" aria-label="Minimap"></canvas>
+            <div id="location"></div>
+          </div>
+          <div id="cmdbar" role="toolbar" aria-label="Commands"></div>
+          <div id="navpad" class="navpad hidden" aria-label="Movement pad"></div>
+        </div>
+        <aside id="sidecol">
+          <div id="party" aria-label="Company"></div>
+          <div id="log" aria-live="polite" aria-label="Messages"></div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal" class="hidden" role="dialog" aria-modal="true">
+    <div id="modal-box"></div>
+  </div>
+
+  <script>
+    // Test-only shim: headless virtual time does not run requestAnimationFrame.
+    window.requestAnimationFrame = function (cb) { return setTimeout(function () { cb(performance.now()); }, 16); };
+  </script>
+  <script src="../rules.js"></script>
+  <script src="../data.js"></script>
+  <script src="../modules.js"></script>
+  <script src="../monsters.js"></script>
+  <script src="../spells.js"></script>
+  <script src="../treasure.js"></script>
+  <script src="../wilds.js"></script>
+  <script src="../generate.js"></script>
+  <script src="../adventures.js"></script>
+  <script src="../figures.js"></script>
+  <script src="../view3d.js"></script>
+  <script src="../map.js"></script>
+  <script src="../watch.js"></script>
+  <script src="../ui.js"></script>
+  <script src="../combat.js"></script>
+  <script src="../overland.js"></script>
+  <script src="../journal.js"></script>
+  <script src="../bestiary.js"></script>
+  <script src="../campaign.js"></script>
+  <script src="../navpad.js"></script>
+  <script src="../game.js"></script>
+  <script>
+    (function () {
+      function start() { EM.UI.init(); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+      else start();
+    })();
+  </script>
+  <pre id="out" style="color:#fff;background:#000;white-space:pre-wrap"></pre>
+  <script>
+
+    var results = [], errors = [];
+    window.onerror = function (msg, src, line) { errors.push(msg + ' @' + line); };
+    function check(name, ok, detail) { results.push((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' - ' + detail : '')); }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function clickText(text) {
+      var b = Array.prototype.filter.call(document.querySelectorAll('button'), function (x) { return x.textContent.indexOf(text) === 0; })[0];
+      if (!b) throw new Error('no button: ' + text);
+      b.click();
+    }
+    function visible(id) { return !document.getElementById(id).classList.contains('hidden'); }
+    function closeAll() { if (!document.getElementById('modal').classList.contains('hidden')) EM.UI.closeModal(); }
+    function waitFor(cond, ms) { return new Promise(function (res) { var t = 0; (function p() { if (cond() || t > ms) return res(cond()); t += 100; setTimeout(p, 100); })(); }); }
+    window.addEventListener('load', async function () {
+      var out = document.getElementById('out');
+      try {
+        clickText('Ready-made company');
+        await wait(50);
+        var S = EM.Game.state();
+        EM.rand = function () { return 0.99; };   // no wandering encounters while we check the walking rules
+        // Leave town by the gate.
+        S.x = 1; S.y = 7; S.dir = 3; EM.Game.requestDraw(); await wait(60);
+        EM.Game.act('fwd'); await wait(700);
+        S = EM.Game.state();
+        check('the town gate leads to the wilds', S.mode === 'wild' && visible('screen-overland'), S.mode);
+        check('the wilds start beside the gate', S.wild.x === 1 && S.wild.y === 8, S.wild.x + ',' + S.wild.y);
+        // Walk the road east, then cross the bridge.
+        EM.Overland.step(1); await wait(30);
+        check('stepping east moves along the road', S.wild.x === 2, '' + S.wild.x);
+        check('steps cost time', EM.Watch.format(S) !== 'Day 1, 08:00');
+        S.wild.x = 15; S.wild.y = 8; EM.Overland.step(1); await wait(30);
+        check('the bridge carries the road over the river', S.wild.x === 16 && S.wild.y === 8, S.wild.x + ',' + S.wild.y);
+        S.wild.x = 15; S.wild.y = 4; EM.Overland.step(1); await wait(30);
+        check('the river cannot be crossed off the bridge', S.wild.x === 15, '' + S.wild.x);
+        // Millbrook: a hamlet with services.
+        S.wild.x = 8; S.wild.y = 11; EM.Overland.step(2); await wait(40);
+        check('Millbrook opens its services', visible('modal') && document.getElementById('modal-box').textContent.indexOf('Millbrook') >= 0);
+        closeAll(); await wait(20);
+        // Commissions and rewards.
+        var goldBefore = S.gold;
+        EM.Journal.accept('rats');
+        check('accepting a commission is recorded', S.quests['E0:rats'].status === 'open');
+        S.flags['rats-slain'] = true;
+        EM.Journal.complete('rats');
+        check('completing a commission pays its gold', S.gold === goldBefore + 60, S.gold + ' vs ' + (goldBefore + 60));
+        check('quest experience is a quarter of the listed figure', S.notes.some(function (n) { return n.text.indexOf('100 experience') >= 0; }));
+        // The brewery is barred until the reeve's commission is taken.
+        S.flags['accepted:E0:main'] = false;
+        S.wild.x = 4; S.wild.y = 5; EM.Overland.step(0); await wait(30);
+        check('the barred brewery stops the company on its step', S.mode === 'wild' && S.wild.x === 4 && S.wild.y === 4, S.mode + ' ' + S.wild.x + ',' + S.wild.y);
+        S.flags['accepted:E0:main'] = true;
+        S.wild.x = 4; S.wild.y = 5; EM.Overland.step(0); await wait(60);
+        check('the brewery opens once the commission is taken', S.mode === 'place' && S.place === 'cellars-1', S.mode + ' ' + S.place);
+        S.mode = 'wild'; S.place = 'thornwick'; EM.Game.arrive('thornwick', 1, 7, 1); await wait(30);
+        S = EM.Game.state();
+        S.mode = 'wild'; S.wild = { x: 1, y: 8, fatigue: 0, seen: {} };
+        // Camp on the safe camp square: no encounter there.
+        S.wild.x = 10; S.wild.y = 14; var clock0 = S.clock; EM.Overland.step(0); await wait(30);
+        EM.Overland.camp(); await wait(40);
+        check('camping on the wilds rests the company', S.clock > clock0 && S.party.every(function (c) { return c.hp === c.hpMax || c.status !== 'ok'; }));
+        // Fight the wolves at their lair; the company returns to the wilds afterwards.
+        EM.rand = Math.random;
+        S.wild.x = 24; S.wild.y = 13; EM.Overland.step(1); await wait(60);
+        check('the wolf lair starts a fight', !!EM.Combat._state() && visible('screen-combat'));
+        EM.Combat.setAuto(true);
+        var ok = await waitFor(function () { return !EM.Combat.isActive() && (visible('screen-overland') || visible('screen-game')); }, 200000);
+        check('the fight ends on the wilds, or carries the company home', ok && (visible('screen-overland') || visible('screen-game')), 'overland ' + visible('screen-overland') + ', game ' + visible('screen-game') + ', mode ' + S.mode + ', party ' + S.party.map(function (c) { return c.status; }).join('/'));
+        // Second cellar level, reached through the first.
+        EM.Game.arrive('cellars-2', 2, 1, 1); await wait(30);
+        check('the second cellar level is entered', S.place === 'cellars-2' && S.mode === 'place');
+        check('the second level holds the wight', EM.Game.currentLevel().groups.some(function (g) { return g.kind === 'wight'; }));
+        // Save while travelling and check the mode is kept.
+        EM.Game.arrive('thornwick', 1, 7, 1); await wait(30);
+        EM.Game.act('fwd'); await wait(60);
+        EM.Game.saveSlot(2);
+        check('a save records the journal and the wilds', !!EM.Game.slotInfo(2));
+      } catch (e) {
+        errors.push('exception: ' + e.message + ' ' + (e.stack || '').split('\n')[1]);
+      }
+      out.textContent = results.join('\n') + '\n\nerrors: ' + (errors.length ? errors.join('; ') : 'none') + '\n\nDONE';
+    });
+  
+  </script>
+</body>
+</html>

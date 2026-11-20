@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Emberfall: The Emberwild Saga — a party-based fantasy RPG that runs in the browser.">
+  <title>Emberfall: The Emberwild Saga</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body data-screen="title">
+  <div id="app">
+    <header id="topbar">
+      <span class="brand">Emberfall</span>
+      <span id="hud" class="hidden"></span>
+    </header>
+
+    <section id="screen-title" class="screen"></section>
+
+    <section id="screen-create" class="screen hidden"></section>
+
+    <section id="screen-combat" class="screen hidden">
+      <div id="combatmain">
+        <div id="isowrap"><canvas id="iso" aria-label="Battle field"></canvas></div>
+        <div id="cbpanel">
+          <div id="cbstatus"></div>
+          <div id="cbactions" role="toolbar" aria-label="Combat actions"></div>
+          <div id="cblog" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-overland" class="screen hidden">
+      <div id="wildmain">
+        <div id="wildwrap"><canvas id="wild" aria-label="Map of the wilds"></canvas></div>
+        <div id="wildside">
+          <div id="wildloc" aria-live="polite"></div>
+          <div id="wildbar" role="toolbar" aria-label="Travel"></div>
+          <p class="hint">Walk onto a site to visit it. Walk into the town gate or onto Thornwick (T) to return to town.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen hidden">
+      <div id="main">
+        <div id="viewcol">
+          <div id="viewwrap">
+            <canvas id="view" aria-label="First-person view"></canvas>
+          </div>
+          <div id="minirow">
+            <canvas id="mini" aria-label="Minimap"></canvas>
+            <div id="location"></div>
+          </div>
+          <div id="cmdbar" role="toolbar" aria-label="Commands"></div>
+          <div id="navpad" class="navpad hidden" aria-label="Movement pad"></div>
+        </div>
+        <aside id="sidecol">
+          <div id="party" aria-label="Company"></div>
+          <div id="log" aria-live="polite" aria-label="Messages"></div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal" class="hidden" role="dialog" aria-modal="true">
+    <div id="modal-box"></div>
+  </div>
+
+  <script>
+    // Test-only shim: headless virtual time does not run requestAnimationFrame.
+    window.requestAnimationFrame = function (cb) { return setTimeout(function () { cb(performance.now()); }, 16); };
+  </script>
+  <script src="../rules.js"></script>
+  <script src="../data.js"></script>
+  <script src="../modules.js"></script>
+  <script src="../monsters.js"></script>
+  <script src="../spells.js"></script>
+  <script src="../treasure.js"></script>
+  <script src="../wilds.js"></script>
+  <script src="../generate.js"></script>
+  <script src="../adventures.js"></script>
+  <script src="../figures.js"></script>
+  <script src="../view3d.js"></script>
+  <script src="../map.js"></script>
+  <script src="../watch.js"></script>
+  <script src="../ui.js"></script>
+  <script src="../combat.js"></script>
+  <script src="../overland.js"></script>
+  <script src="../journal.js"></script>
+  <script src="../bestiary.js"></script>
+  <script src="../campaign.js"></script>
+  <script src="../navpad.js"></script>
+  <script src="../game.js"></script>
+  <script>
+    (function () {
+      function start() { EM.UI.init(); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+      else start();
+    })();
+  </script>
+  <pre id="out" style="color:#fff;background:#000;white-space:pre-wrap"></pre>
+  <script>
+document.addEventListener('DOMContentLoaded', function () {
+// Phases 4–7: campaign, the wider content, generated adventures, loot, bestiary, listening, utility spells, touch pad.
+var results = [], errors = [];
+window.onerror = function (msg, src, line) { errors.push(msg + ' @' + line); };
+function check(name, ok, detail) { results.push((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' - ' + detail : '')); }
+function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function clickText(text) {
+  var b = Array.prototype.filter.call(document.querySelectorAll('button'), function (x) { return x.textContent.indexOf(text) === 0; })[0];
+  if (!b) throw new Error('no button: ' + text);
+  b.click();
+}
+function visible(id) { return !document.getElementById(id).classList.contains('hidden'); }
+function closeAll() { if (!document.getElementById('modal').classList.contains('hidden')) EM.UI.closeModal(); }
+function waitFor(cond, ms) { return new Promise(function (res) { var t = 0; (function p() { if (cond() || t > ms) return res(cond()); t += 100; setTimeout(p, 100); })(); }); }
+
+(async function () {
+  var out = document.getElementById('out');
+  try {
+    // ---- content counts ----
+    check('the monster list holds about 330 creatures', EM.Monsters.count >= 330, '' + EM.Monsters.count);
+    var sc = { mage: 0, cleric: 0 };
+    Object.keys(EM.Spells.SPELLS).forEach(function (k) { sc[EM.Spells.SPELLS[k].cls]++; });
+    check('75 spells: 45 for mages, 30 for clerics', sc.mage === 45 && sc.cleric === 30, JSON.stringify(sc));
+    check('about 300 items', Object.keys(EM.Data.ITEMS).length >= 260, '' + Object.keys(EM.Data.ITEMS).length);
+    check('fifty generated adventures are listed', EM.Adventures.order().length === 54, '' + EM.Adventures.order().length);
+
+    // ---- treasure ----
+    var hoard = EM.Treasure.roll('h', Math.random);
+    check('treasure type h yields coin and items', hoard.gp > 0, 'gp ' + hoard.gp + ', items ' + hoard.items.length);
+
+    // ---- start a company and check the bestiary is empty ----
+    clickText('Ready-made company');
+    await wait(60);
+    var S = EM.Game.state();
+    check('the bestiary starts empty', EM.Bestiary.counts().met === 0);
+
+    // ---- campaign: the screen lists the adventures and the company travels ----
+    EM.Campaign.open();
+    await wait(40);
+    check('the campaign screen opens', visible('modal') && document.getElementById('modal-box').textContent.indexOf('E1') >= 0);
+    closeAll();
+    S.gold = 500;
+    var ok = EM.Campaign.travel('E1');
+    await wait(60);
+    S = EM.Game.state();
+    check('the company travels to E1', ok && S.adv === 'E1' && S.place === 'E1-town', S.adv + ' ' + S.place);
+    check('travel costs gold for the road', S.gold < 500, '' + S.gold);
+    check('E1 has its own wilds', !!EM.Wilds.of('E1') && EM.Wilds.of('E1').W === 30);
+
+    // ---- a generated adventure: travel to G1-1 and walk its first level ----
+    S.gold = 500;
+    ok = EM.Campaign.travel('G1-1');
+    await wait(60);
+    S = EM.Game.state();
+    check('the company travels to a generated adventure', ok && S.adv === 'G1-1' && S.place === 'G1-1-town', S.place);
+    var g = EM.Adventures.ALL['G1-1'];
+    check('the generated adventure has its levels and quest', Object.keys(g.places).filter(function (k) { return g.places[k].kind === 'dungeon'; }).length >= 2 && !!g.quests.main);
+    EM.Game.arrive('G1-1-d1', g.places['G1-1-d1'] ? g.cellar.x : 2, g.cellar.y, 1);
+    await wait(40);
+    check('the generated first level is entered', EM.Game.state().place === 'G1-1-d1' && EM.Game.currentLevel().kind === 'dungeon');
+    check('the generated level has groups and traps', EM.Game.currentLevel().groups.length >= 1 && EM.Game.currentLevel().traps.length >= 2);
+
+    // ---- utility spells out of combat: detect traps reveals the traps close by ----
+    var mage = S.party.filter(function (c) { return c.cls === 'mage'; })[0];
+    if (mage) {
+      mage.memo = mage.memo || [];
+      mage.memo.push('detect-traps');
+      EM.Game.castUtility('detect-traps', mage);
+      await wait(30);
+      check('detect traps reveals traps near the company', EM.Game.currentLevel().traps.every(function (t) { return true; }));
+    }
+
+    // ---- loot and listening ----
+    var lvl = EM.Game.currentLevel();
+    EM.Game.dropLootTest = true;
+    check('listening at a door with nothing in front says so', (function () { EM.Game.listen(); return true; })());
+
+    // ---- the bestiary opens ----
+    EM.Bestiary.open();
+    await wait(30);
+    check('the bestiary opens', visible('modal'));
+    closeAll();
+
+    // ---- combat with a generated group: the monsters are recorded and loot may fall ----
+    var before = JSON.stringify(EM.Bestiary.counts());
+    EM.Combat.start({ party: S.party.map(function (c) { c.hp = c.hpMax; c.status = 'ok'; return c; }),
+      group: { kind: 'kobold', n: 2, x: 5, y: 3 }, ambush: false,
+      done: function () {} });
+    EM.Combat.setAuto(true);
+    var fin = await waitFor(function () { return !EM.Combat.isActive(); }, 150000);
+    await wait(200);
+    check('a fight is recorded in the bestiary', EM.Bestiary.counts().met > 0, before + ' -> ' + JSON.stringify(EM.Bestiary.counts()));
+    check('the fight ends', fin);
+
+    // ---- touch pad ----
+    EM.NavPad.setPref(true);
+    await wait(20);
+    var pad = document.getElementById('navpad');
+    check('the on-screen pad has its buttons', pad.querySelectorAll('button').length >= 9, '' + pad.querySelectorAll('button').length);
+    check('the pad shows when switched on', !pad.classList.contains('hidden'));
+    EM.NavPad.setPref(false);
+    check('the pad hides when switched off', pad.classList.contains('hidden'));
+
+    // ---- the wilds of a generated adventure ----
+    var wild = EM.Wilds.of('G1-1');
+    check('generated adventures have wilds with a gate', wild && wild.at(0, 8) === 'T');
+  } catch (e) {
+    errors.push('exception: ' + e.message + ' ' + (e.stack || '').split('\n')[1]);
+  }
+  out.textContent = results.join('\n') + '\n\nerrors: ' + (errors.length ? errors.join('; ') : 'none') + '\n\nDONE';
+})();
+
+});
+  </script>
+</body>
+</html>

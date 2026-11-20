@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Emberfall: The Emberwild Saga — a party-based fantasy RPG that runs in the browser.">
+  <title>Emberfall: The Emberwild Saga</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-screen="title">
+  <div id="app">
+    <header id="topbar">
+      <span class="brand">Emberfall</span>
+      <span id="hud" class="hidden"></span>
+    </header>
+
+    <section id="screen-title" class="screen"></section>
+
+    <section id="screen-create" class="screen hidden"></section>
+
+    <section id="screen-combat" class="screen hidden">
+      <div id="combatmain">
+        <div id="isowrap"><canvas id="iso" aria-label="Battle field"></canvas></div>
+        <div id="cbpanel">
+          <div id="cbstatus"></div>
+          <div id="cbactions" role="toolbar" aria-label="Combat actions"></div>
+          <div id="cblog" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-overland" class="screen hidden">
+      <div id="wildmain">
+        <div id="wildwrap"><canvas id="wild" aria-label="Map of the wilds"></canvas></div>
+        <div id="wildside">
+          <div id="wildloc" aria-live="polite"></div>
+          <div id="wildbar" role="toolbar" aria-label="Travel"></div>
+          <p class="hint">Walk onto a site to visit it. Walk into the town gate or onto Thornwick (T) to return to town.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen hidden">
+      <div id="main">
+        <div id="viewcol">
+          <div id="viewwrap">
+            <canvas id="view" aria-label="First-person view"></canvas>
+          </div>
+          <div id="minirow">
+            <canvas id="mini" aria-label="Minimap"></canvas>
+            <div id="location"></div>
+          </div>
+          <div id="cmdbar" role="toolbar" aria-label="Commands"></div>
+          <div id="navpad" class="navpad hidden" aria-label="Movement pad"></div>
+        </div>
+        <aside id="sidecol">
+          <div id="party" aria-label="Company"></div>
+          <div id="log" aria-live="polite" aria-label="Messages"></div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal" class="hidden" role="dialog" aria-modal="true">
+    <div id="modal-box"></div>
+  </div>
+
+  <script src="rules.js"></script>
+  <script src="data.js"></script>
+  <script src="modules.js"></script>
+  <script src="monsters.js"></script>
+  <script src="spells.js"></script>
+  <script src="treasure.js"></script>
+  <script src="wilds.js"></script>
+  <script src="generate.js"></script>
+  <script src="adventures.js"></script>
+  <script src="figures.js"></script>
+  <script src="view3d.js"></script>
+  <script src="map.js"></script>
+  <script src="watch.js"></script>
+  <script src="ui.js"></script>
+  <script src="combat.js"></script>
+  <script src="overland.js"></script>
+  <script src="journal.js"></script>
+  <script src="bestiary.js"></script>
+  <script src="campaign.js"></script>
+  <script src="navpad.js"></script>
+  <script src="game.js"></script>
+  <script>
+    (function () {
+      function start() { EM.UI.init(); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+      else start();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Emberfall: The Emberwild Saga — a party-based fantasy RPG that runs in the browser.">
+  <title>Emberfall: The Emberwild Saga</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body data-screen="title">
+  <div id="app">
+    <header id="topbar">
+      <span class="brand">Emberfall</span>
+      <span id="hud" class="hidden"></span>
+    </header>
+
+    <section id="screen-title" class="screen"></section>
+
+    <section id="screen-create" class="screen hidden"></section>
+
+    <section id="screen-combat" class="screen hidden">
+      <div id="combatmain">
+        <div id="isowrap"><canvas id="iso" aria-label="Battle field"></canvas></div>
+        <div id="cbpanel">
+          <div id="cbstatus"></div>
+          <div id="cbactions" role="toolbar" aria-label="Combat actions"></div>
+          <div id="cblog" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-overland" class="screen hidden">
+      <div id="wildmain">
+        <div id="wildwrap"><canvas id="wild" aria-label="Map of the wilds"></canvas></div>
+        <div id="wildside">
+          <div id="wildloc" aria-live="polite"></div>
+          <div id="wildbar" role="toolbar" aria-label="Travel"></div>
+          <p class="hint">Walk onto a site to visit it. Walk into the town gate or onto Thornwick (T) to return to town.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen hidden">
+      <div id="main">
+        <div id="viewcol">
+          <div id="viewwrap">
+            <canvas id="view" aria-label="First-person view"></canvas>
+          </div>
+          <div id="minirow">
+            <canvas id="mini" aria-label="Minimap"></canvas>
+            <div id="location"></div>
+          </div>
+          <div id="cmdbar" role="toolbar" aria-label="Commands"></div>
+          <div id="navpad" class="navpad hidden" aria-label="Movement pad"></div>
+        </div>
+        <aside id="sidecol">
+          <div id="party" aria-label="Company"></div>
+          <div id="log" aria-live="polite" aria-label="Messages"></div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal" class="hidden" role="dialog" aria-modal="true">
+    <div id="modal-box"></div>
+  </div>
+
+  <script>
+    // Test-only shim: headless virtual time does not run requestAnimationFrame.
+    window.requestAnimationFrame = function (cb) { return setTimeout(function () { cb(performance.now()); }, 16); };
+  </script>
+  <script src="../rules.js"></script>
+  <script src="../data.js"></script>
+  <script src="../modules.js"></script>
+  <script src="../monsters.js"></script>
+  <script src="../spells.js"></script>
+  <script src="../treasure.js"></script>
+  <script src="../wilds.js"></script>
+  <script src="../generate.js"></script>
+  <script src="../adventures.js"></script>
+  <script src="../figures.js"></script>
+  <script src="../view3d.js"></script>
+  <script src="../map.js"></script>
+  <script src="../watch.js"></script>
+  <script src="../ui.js"></script>
+  <script src="../combat.js"></script>
+  <script src="../overland.js"></script>
+  <script src="../journal.js"></script>
+  <script src="../bestiary.js"></script>
+  <script src="../campaign.js"></script>
+  <script src="../navpad.js"></script>
+  <script src="../game.js"></script>
+  <script>
+    (function () {
+      function start() { EM.UI.init(); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+      else start();
+    })();
+  </script>
+  <pre id="out" style="color:#fff;background:#000;white-space:pre-wrap"></pre>
+  <script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    var out = document.getElementById('out');
+    var results = [], errors = [];
+    window.onerror = function (msg, src, line) { errors.push(msg + ' @' + line); };
+    function check(name, ok, detail) { results.push((ok ? 'PASS ' : 'FAIL ') + name + (detail ? ' - ' + detail : '')); }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    function party() {
+      return EM.Data.PREGENS.map(function (p, i) {
+        return EM.Rules.makeCharacter({ id: 'pg' + i, name: p.name, race: p.race, cls: p.cls, align: p.align, scores: p.scores,
+          weapon: p.weapon, armour: p.armour, shield: p.shield || null, spec: p.spec || null, portrait: 1000 + i * 37 });
+      });
+    }
+    function fight(kind, n, x, y) {
+      return new Promise(function (resolve) {
+        var pc = party();
+        var before = pc.map(function (c) { return c.xp; });
+        EM.Combat.start({ party: pc, group: { kind: kind, n: n, x: x, y: y }, ambush: false,
+          done: function (res) { resolve({ res: res, pc: pc, before: before }); } });
+        EM.Combat.setAuto(true);
+      });
+    }
+    (async function () {
+      try {
+        await wait(20);
+        var scen = [['goblin', 3, 5, 12], ['skeleton', 3, 19, 4], ['wight', 1, 19, 4], ['bugbear', 2, 5, 5]];
+        for (var i = 0; i < scen.length; i++) {
+          var s = scen[i];
+          var r = await fight(s[0], s[1], s[2], s[3]);
+          var gained = r.pc.reduce(function (a, c, k) { return a + (c.xp - r.before[k]); }, 0);
+          check(s[1] + ' ' + s[0] + ' fight ends', true,
+            (r.res.victory ? 'victory' : r.res.fled ? 'fled' : 'defeat') + ', killed ' + r.res.killed.length + ', xp ' + r.res.xp + ', shared ' + gained);
+          if (r.res.victory) check('victory awards experience', r.res.killed.length === 0 || gained > 0);
+          if (r.res.victory) check('every foe slain or fled after victory', r.res.remaining === 0 || r.res.killed.length < s[1]);
+          check('no living foe remains as active after a defeat', !(r.res.defeated && r.res.remaining > 0 && r.pc.every(function (c) { return c.status === 'ok'; })));
+          EM.Combat.setAuto(false);
+          await wait(50);
+        }
+        check('combat screen used', document.getElementById('screen-combat') !== null);
+      } catch (e) {
+        errors.push('exception: ' + e.message + ' ' + (e.stack || '').split('\n')[1]);
+      }
+      out.textContent = results.join('\n') + '\n\nerrors: ' + (errors.length ? errors.join('; ') : 'none') + '\n\nDONE';
+    })();
+  
+});
+  </script>
+</body>
+</html>
